@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
@@ -6,12 +7,9 @@ const app = express();
 const port = Number(process.env.PORT || 8787);
 
 const idempotencyCache = new Set();
+const callStartCache = new Set();
 const storedEvents = [];
 
-const webhookApiKey =
-  process.env.ELEVENLABS_WEBHOOK_API_KEY ||
-  process.env.VITE_ELEVENLABS_WEBHOOK_API_KEY ||
-  '';
 const supabaseUrl =
   process.env.SUPABASE_URL ||
   process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -34,27 +32,12 @@ function sendJson(res, status, payload) {
   res.status(status).json(payload);
 }
 
-function authenticate(req, res, next) {
-  if (!webhookApiKey) {
-    return next();
-  }
-
-  const authHeader = String(req.headers.authorization || '');
-  const apiKeyHeader = String(req.headers['x-api-key'] || '');
-  const expectedBearer = `Bearer ${webhookApiKey}`;
-
-  if (authHeader !== expectedBearer && apiKeyHeader !== webhookApiKey) {
-    return sendJson(res, 401, { ok: false, error: 'Unauthorized' });
-  }
-
-  return next();
-}
 
 app.get('/health', (_req, res) => {
   sendJson(res, 200, { ok: true });
 });
 
-app.post('/v1/dispatch/events', authenticate, async (req, res) => {
+app.post('/v1/dispatch/events', async (req, res) => {
   const idempotencyKey = String(req.headers['idempotency-key'] || '');
   if (idempotencyKey && idempotencyCache.has(idempotencyKey)) {
     return sendJson(res, 200, { ok: true, duplicate: true });
@@ -86,10 +69,6 @@ app.post('/v1/dispatch/events', authenticate, async (req, res) => {
 
   console.log('[dispatch webhook] event received', {
     incident_id: body.incident_id,
-    call_sid: body.call_sid,
-    event_type: body.event_type,
-    priority: body.priority,
-    verified: body.verified,
     location__json: body.location_json,
   });
 
@@ -101,7 +80,7 @@ app.post('/v1/dispatch/events', authenticate, async (req, res) => {
   } else {
     console.warn('[dispatch webhook] No location_json provided, skipping geocode');
   }
-  if (locationPin && supabase && body.incident_id) {
+  if (locationPin) {
     const { error } = await supabase
       .from('calls')
       .update({
@@ -115,6 +94,7 @@ app.post('/v1/dispatch/events', authenticate, async (req, res) => {
       console.error('[dispatch webhook] Supabase update failed', error);
     } else {
       console.log('[dispatch webhook] Supabase updated call location', body.incident_id);
+      console.log('confirmed lat and long:', locationPin.lat, locationPin.lng);
     }
   } else if (locationPin && !body.incident_id) {
     console.warn('[dispatch webhook] Missing incident_id, cannot update Supabase');
@@ -124,6 +104,46 @@ app.post('/v1/dispatch/events', authenticate, async (req, res) => {
 
   const result = sendJson(res, 200, { ok: true, event_received: true });
   return result;
+});
+
+app.post('/v1/dispatch/call-start', async (req, res) => {
+  const body = req.body || {};
+  const incidentId = body.incident_id;
+
+
+  if (callStartCache.has(incidentId)) {
+    return sendJson(res, 200, { ok: true, duplicate: true });
+  }
+
+  if (!supabase) {
+    console.warn('[dispatch call-start] Supabase not configured for updates');
+    return sendJson(res, 500, { ok: false, error: 'Supabase not configured' });
+  }
+
+  const insertData = {
+    call_id: incidentId,
+    status: 'ai_handling',
+    incident_type: body.incident_type || 'Incoming Call...',
+    location_text: body.location_text || 'Identifying...',
+    source_type: 'web_voice',
+    started_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase
+    .from('calls')
+    .upsert(insertData, { onConflict: 'call_id' })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('[dispatch call-start] Supabase upsert failed', error);
+    return sendJson(res, 500, { ok: false, error: 'Supabase upsert failed' });
+  }
+
+  callStartCache.add(incidentId);
+  console.log('[dispatch call-start] call created/updated', data?.call_id);
+
+  return sendJson(res, 200, { ok: true, call: data });
 });
 
 app.get('/v1/dispatch/events', (_req, res) => {
@@ -143,7 +163,8 @@ function buildAddressString(locationJson) {
   const parts = [
     address.Building_House_Number,
     address.Street,
-    address.State_Province_Town_City
+    address.State_Province_Town_City,
+    address.landmark
   ].filter(Boolean);
 
   const result = parts.join(' ').trim();
