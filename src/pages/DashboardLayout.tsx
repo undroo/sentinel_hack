@@ -20,12 +20,14 @@ export default function DashboardLayout() {
       setError('Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file');
       return;
     }
-    loadCalls();
+    loadCalls(false);
     const cleanup1 = subscribeToCallUpdates();
     const cleanup2 = subscribeToCallActionsUpdates();
+    const pollId = window.setInterval(() => loadCalls(false), 1000);
     return () => {
       cleanup1();
       cleanup2();
+      window.clearInterval(pollId);
     };
   }, []);
 
@@ -71,8 +73,10 @@ export default function DashboardLayout() {
     };
   }, [activeCall?.id, setActiveCall]);
 
-  const loadCalls = async () => {
-    setIsLoading(true);
+  const loadCalls = async (showLoading = false) => {
+    if (showLoading) {
+      setIsLoading(true);
+    }
     try {
       const { data, error } = await supabase
         .from('calls')
@@ -104,13 +108,21 @@ export default function DashboardLayout() {
         }));
         
         setCalls(callsWithMarkSafe);
+        if (callsWithMarkSafe.length > 0) {
+          const newestCall = callsWithMarkSafe[0];
+          if (activeCall?.id !== newestCall.id) {
+            handleSelectCall(newestCall, false);
+          }
+        }
       } else {
         setCalls([]);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load calls');
     } finally {
-      setIsLoading(false);
+      if (showLoading) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -155,6 +167,9 @@ export default function DashboardLayout() {
               hasMarkSafeAction: (actionsData || []).length > 0,
             };
             setCalls((prevCalls: Call[]) => [callWithMarkSafe, ...prevCalls]);
+            if (activeCall?.id !== callWithMarkSafe.id) {
+              handleSelectCall(callWithMarkSafe, false);
+            }
           }
         }
       )
@@ -195,8 +210,10 @@ export default function DashboardLayout() {
     };
   };
 
-  const handleSelectCall = async (call: Call) => {
-    setIsLoading(true);
+  const handleSelectCall = async (call: Call, showLoading = true) => {
+    if (showLoading) {
+      setIsLoading(true);
+    }
     try {
       const { data: transcripts } = await supabase
         .from('transcript_blocks')
@@ -226,7 +243,9 @@ export default function DashboardLayout() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load call details');
     } finally {
-      setIsLoading(false);
+      if (showLoading) {
+        setIsLoading(false);
+      }
     }
   };
 

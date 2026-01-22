@@ -81,25 +81,27 @@ app.post('/v1/dispatch/events', async (req, res) => {
     console.warn('[dispatch webhook] No location_json provided, skipping geocode');
   }
   if (locationPin) {
-    const { error } = await supabase
-      .from('calls')
-      .update({
-        location_lat: locationPin.lat,
-        location_lon: locationPin.lng,
-        location_text: locationPin.formatted_address,
-      })
-      .eq('call_id', body.incident_id);
-
-    if (error) {
-      console.error('[dispatch webhook] Supabase update failed', error);
+    if (!supabase) {
+      console.warn('[dispatch webhook] Supabase not configured for updates');
+    } else if (!body.incident_id) {
+      console.warn('[dispatch webhook] Missing incident_id, cannot update Supabase');
     } else {
-      console.log('[dispatch webhook] Supabase updated call location', body.incident_id);
-      console.log('confirmed lat and long:', locationPin.lat, locationPin.lng);
+      const { error } = await supabase
+        .from('calls')
+        .update({
+          location_lat: locationPin.lat,
+          location_lon: locationPin.lng,
+          location_text: locationPin.formatted_address,
+        })
+        .eq('call_id', body.incident_id);
+
+      if (error) {
+        console.error('[dispatch webhook] Supabase update failed', error);
+      } else {
+        console.log('[dispatch webhook] Supabase updated call location', body.incident_id);
+        console.log('confirmed lat and long:', locationPin.lat, locationPin.lng);
+      }
     }
-  } else if (locationPin && !body.incident_id) {
-    console.warn('[dispatch webhook] Missing incident_id, cannot update Supabase');
-  } else if (!supabase) {
-    console.warn('[dispatch webhook] Supabase not configured for updates');
   }
 
   const result = sendJson(res, 200, { ok: true, event_received: true });
@@ -110,6 +112,9 @@ app.post('/v1/dispatch/call-start', async (req, res) => {
   const body = req.body || {};
   const incidentId = body.incident_id;
 
+  if (!incidentId) {
+    return sendJson(res, 422, { ok: false, error: 'Missing incident_id' });
+  }
 
   if (callStartCache.has(incidentId)) {
     return sendJson(res, 200, { ok: true, duplicate: true });
