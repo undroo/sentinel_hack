@@ -13,6 +13,7 @@ export default function DashboardLayout() {
   const { activeCall, setActiveCall, calls, setCalls, isLoading, setIsLoading } = useCall();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userSelectedCall, setUserSelectedCall] = useState(false);
   const activeCallRef = useRef(activeCall);
 
   useEffect(() => {
@@ -108,7 +109,7 @@ export default function DashboardLayout() {
         }));
         
         setCalls(callsWithMarkSafe);
-        if (callsWithMarkSafe.length > 0) {
+        if (!userSelectedCall && callsWithMarkSafe.length > 0) {
           const newestCall = callsWithMarkSafe[0];
           if (activeCall?.id !== newestCall.id) {
             handleSelectCall(newestCall, false);
@@ -167,7 +168,7 @@ export default function DashboardLayout() {
               hasMarkSafeAction: (actionsData || []).length > 0,
             };
             setCalls((prevCalls: Call[]) => [callWithMarkSafe, ...prevCalls]);
-            if (activeCall?.id !== callWithMarkSafe.id) {
+            if (!userSelectedCall && activeCall?.id !== callWithMarkSafe.id) {
               handleSelectCall(callWithMarkSafe, false);
             }
           }
@@ -210,7 +211,10 @@ export default function DashboardLayout() {
     };
   };
 
-  const handleSelectCall = async (call: Call, showLoading = true) => {
+  const handleSelectCall = async (call: Call, showLoading = true, isUserAction = false) => {
+    if (isUserAction) {
+      setUserSelectedCall(true);
+    }
     if (showLoading) {
       setIsLoading(true);
     }
@@ -320,7 +324,7 @@ export default function DashboardLayout() {
                 {highImpactAICalls.map((call) => (
                   <button
                     key={call.id}
-                    onClick={() => handleSelectCall(call)}
+          onClick={() => handleSelectCall(call, true, true)}
                     className="text-xs px-2 py-1 bg-orange-100 hover:bg-orange-200 text-orange-900 rounded border border-orange-300 transition-colors"
                   >
                     {call.call_id} - {call.impact_category}

@@ -181,7 +181,10 @@ function buildAddressString(locationJson) {
 }
 
 async function geocodeAddress(addressString) {
-  const geocodingApiKey = 'AIzaSyDam7LCuyAVKFs23ZGcydBPGOklkQcVaKI';
+  const geocodingApiKey =
+    process.env.GOOGLE_GEOCODING_API_KEY ||
+    process.env.VITE_GOOGLE_MAPS_API_KEY ||
+    '';
 
   if (!geocodingApiKey) {
     console.warn('[dispatch webhook] Missing Google Geocoding API key');
