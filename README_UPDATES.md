@@ -8,7 +8,7 @@ This file documents the current setup, endpoints, and required environment varia
 - Supabase project (URL + keys)
 - Google Maps API key with **Maps JavaScript API** enabled
 - Google Geocoding API key (or reuse the Maps key if it has Geocoding enabled)
-- ngrok (optional, for ElevenLabs webhooks)
+- ngrok (required for ElevenLabs webhooks)
 
 ## 2) Install Dependencies
 
@@ -126,7 +126,19 @@ Example payload:
 }
 ```
 
-## 8) ngrok (Optional)
+## 8) ngrok (Required)
+
+Install ngrok (Windows):
+
+```bash
+winget install --id ngrok.ngrok --accept-package-agreements --accept-source-agreements
+```
+
+Configure ngrok with your authtoken:
+
+```bash
+ngrok config add-authtoken YOUR_NGROK_AUTHTOKEN
+```
 
 Expose the backend for ElevenLabs webhooks:
 
@@ -139,6 +151,12 @@ Your webhook URLs become:
 ```
 https://<your-ngrok-subdomain>.ngrok-free.dev/v1/dispatch/call-start
 https://<your-ngrok-subdomain>.ngrok-free.dev/v1/dispatch/events
+```
+
+Open the ngrok dashboard to find your current subdomain:
+
+```
+http://127.0.0.1:4040
 ```
 
 ## 9) Live Dashboard Behavior
