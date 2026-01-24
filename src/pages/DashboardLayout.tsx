@@ -15,6 +15,7 @@ export default function DashboardLayout() {
   const [error, setError] = useState<string | null>(null);
   const [userSelectedCall, setUserSelectedCall] = useState(false);
   const activeCallRef = useRef(activeCall);
+  const userSelectedCallRef = useRef(userSelectedCall);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -36,6 +37,11 @@ export default function DashboardLayout() {
   useEffect(() => {
     activeCallRef.current = activeCall;
   }, [activeCall]);
+
+  // Keep ref in sync with userSelectedCall
+  useEffect(() => {
+    userSelectedCallRef.current = userSelectedCall;
+  }, [userSelectedCall]);
 
   // Subscribe to call_actions updates for the active call
   useEffect(() => {
@@ -109,9 +115,9 @@ export default function DashboardLayout() {
         }));
         
         setCalls(callsWithMarkSafe);
-        if (!userSelectedCall && callsWithMarkSafe.length > 0) {
+        if (!userSelectedCallRef.current && callsWithMarkSafe.length > 0) {
           const newestCall = callsWithMarkSafe[0];
-          if (activeCall?.id !== newestCall.id) {
+          if (activeCallRef.current?.id !== newestCall.id) {
             handleSelectCall(newestCall, false);
           }
         }
@@ -214,6 +220,7 @@ export default function DashboardLayout() {
   const handleSelectCall = async (call: Call, showLoading = true, isUserAction = false) => {
     if (isUserAction) {
       setUserSelectedCall(true);
+      userSelectedCallRef.current = true;
     }
     if (showLoading) {
       setIsLoading(true);
@@ -342,7 +349,7 @@ export default function DashboardLayout() {
             sidebarOpen ? 'w-80' : 'w-0'
           } bg-white border-r border-gray-200 overflow-y-auto transition-all duration-300 lg:w-80`}
         >
-          <CallList calls={calls} activeCall={activeCall} onSelectCall={handleSelectCall} isLoading={isLoading} />
+          <CallList calls={calls} activeCall={activeCall} onSelectCall={(call) => handleSelectCall(call, true, true)} isLoading={isLoading} />
         </aside>
 
         <main className="flex-1 overflow-y-auto">
